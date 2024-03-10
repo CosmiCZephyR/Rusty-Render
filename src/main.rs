@@ -75,17 +75,17 @@ fn draw_debug(
     );
     drawer.draw_string(10, 70, format!("DELTA: {}", delta).as_str(), 0xFFFFFF);
     drawer.draw_string(10, 85, format!("FPS: {:.2}", fps).as_str(), 0xFFFFFF);
-    drawer.draw_string(10, 115, format!("YAW: {}", drawer.yaw).as_str(), 0xFFFFFF);
+    drawer.draw_string(10, 115, format!("YAW: {}", drawer.camera.yaw).as_str(), 0xFFFFFF);
     drawer.draw_string(
         10,
         130,
-        format!("PITCH: {}", drawer.pitch).as_str(),
+        format!("PITCH: {}", drawer.camera.pitch).as_str(),
         0xFFFFFF,
     );
     drawer.draw_string(
         10,
         145,
-        format!("LOOK DIR: {}", drawer.look_dir).as_str(),
+        format!("LOOK DIR: {}", drawer.camera.look_dir).as_str(),
         0xFFFFFF,
     );
 }

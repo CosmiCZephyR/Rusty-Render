@@ -11,7 +11,7 @@ pub struct Vec4F {
 
 impl Default for Vec4F {
     fn default() -> Self {
-        Vec4F { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }
+        Vec4F { x: 0.0_f32, y: 0.0_f32, z: 0.0_f32, w: 1.0_f32 }
     }
 }
 

@@ -2,6 +2,7 @@ use minifb::{Key, Window};
 use rand::Rng;
 use rusttype::{point, Font, Scale};
 use std::{cell::RefCell, collections::VecDeque, mem::swap, rc::Rc, vec};
+use crate::camera::Camera;
 
 pub use crate::math::{matrix4::Mat4, mesh::Mesh, vector4f::Vec4F};
 
@@ -65,10 +66,7 @@ pub struct Drawer {
     mesh: Mesh,
     project_matrix: Mat4,
     theta: f32,
-    camera: Vec4F,
-    pub look_dir: Vec4F,
-    pub pitch: f32,
-    pub yaw: f32,
+    pub camera: Camera
 }
 
 impl Drawer {
@@ -80,11 +78,8 @@ impl Drawer {
             mesh: Mesh::default(),
             project_matrix: Mat4::default(),
             theta: 0.0,
-            camera: Vec4F::default(),
-            look_dir: Vec4F::default(),
-            window,
-            pitch: 0.0,
-            yaw: 0.0,
+            camera: Camera::default(),
+            window
         }
     }
 
@@ -93,14 +88,9 @@ impl Drawer {
             .mesh
             .parse_obj_file(r"E:\Projects\rusty-3d\src\objects\ship.obj");
 
-        let near: f32 = 0.05;
-        let far: f32 = 4000.0;
-        let fov_deg: f32 = 75.0;
-        let aspect_ratio = self.height as f32 / self.width as f32;
+        self.project_matrix = self.camera.get_projection_matrix();
 
-        self.project_matrix = Mat4::project(fov_deg, aspect_ratio, near, far);
-
-        (near, far, fov_deg, aspect_ratio)
+        (self.camera.near, self.camera.far, self.camera.fov, self.camera.aspect_ratio)
     }
 
     pub fn update(&mut self, elapsed_time: f32) {
@@ -119,28 +109,7 @@ impl Drawer {
         mat_world = mat_rot_z * mat_rot_x;
         mat_world = mat_world * mat_trans;
 
-        let up = Vec4F {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-            ..Vec4F::default()
-        };
-
-        let target = Vec4F {
-            x: 0.0,
-            y: 0.0,
-            z: 1.0,
-            ..Vec4F::default()
-        };
-
-        let mut mat_camera_rot = Mat4::default();
-        mat_camera_rot = mat_camera_rot.rotate_y(self.yaw);
-        self.look_dir = mat_camera_rot * target;
-        let target = self.camera + self.look_dir;
-
-        let mat_camera = Mat4::point_at(self.camera, target, up);
-
-        let mat_view = mat_camera.quick_inverse();
+        let mat_view = self.camera.get_view_matrix();
 
         let mut triangles_to_raster: Vec<Triangle> = Vec::new();
 
@@ -163,18 +132,18 @@ impl Drawer {
             normal = line1.cross_product(&line2);
             normal = normal.normalize();
 
-            let camera_ray = tri_transformed.p[0] - self.camera;
+            let camera_ray = tri_transformed.p[0] - self.camera.position;
 
             if normal.dot_product(&camera_ray) < 0.0 {
                 let mut light_direction = Vec4F {
-                    x: 0.0,
-                    y: 1.0,
-                    z: -1.0,
+                    x: 0.0_f32,
+                    y: 1.0_f32,
+                    z: -1.0_f32,
                     ..Vec4F::default()
                 };
                 light_direction = light_direction.normalize();
 
-                let dot_product = 0.1f32.max(normal.dot_product(&light_direction));
+                let dot_product = 0.1_f32.max(normal.dot_product(&light_direction));
 
                 let col = Self::get_color(dot_product);
                 tri_transformed.color = col;
@@ -370,28 +339,28 @@ impl Drawer {
         self.window.borrow().get_keys().iter().for_each(|key| {
             match key {
                 Key::Space => {
-                    self.camera.y += 8.0 * elapsed_time;
+                    self.camera.position.y += 8.0 * elapsed_time;
                     if self.window.borrow().is_key_down(Key::LeftCtrl) {
-                        self.camera.y += 16.0 * elapsed_time;
+                        self.camera.position.y += 16.0 * elapsed_time;
                     }
                 }
                 Key::LeftShift => {
-                    self.camera.y -= 8.0 * elapsed_time;
+                    self.camera.position.y -= 8.0 * elapsed_time;
                 }
                 Key::W => {
-                    self.camera += self.look_dir * (8.0 * elapsed_time);
+                    self.camera.position += self.camera.look_dir * (8.0 * elapsed_time);
                     if self.window.borrow().is_key_down(Key::LeftCtrl) {
-                        self.camera += self.look_dir * (8.0 * elapsed_time) * 2.0;
+                        self.camera.position += self.camera.look_dir * (8.0 * elapsed_time) * 2.0;
                     }
                 }
                 Key::S => {
-                    self.camera -= self.look_dir * (8.0 * elapsed_time);
+                    self.camera.position -= self.camera.look_dir * (8.0 * elapsed_time);
                 }
                 Key::A => {
-                    self.yaw -= 2.0 * elapsed_time;
+                    self.camera.yaw -= 2.0 * elapsed_time;
                 }
                 Key::D => {
-                    self.yaw += 2.0 * elapsed_time;
+                    self.camera.yaw += 2.0 * elapsed_time;
                 }
                 _ => {}
             }

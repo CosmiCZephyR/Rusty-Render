@@ -19,22 +19,22 @@ impl Mat4 {
     pub fn make_identity() -> Mat4 {
         Mat4 {
             m: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0]
+                [1.0_f32, 0.0_f32, 0.0_f32, 0.0_f32],
+                [0.0_f32, 1.0_f32, 0.0_f32, 0.0_f32],
+                [0.0_f32, 0.0_f32, 1.0_f32, 0.0_f32],
+                [0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32]
             ]
         }
     }
 
     pub fn rotate_x(&self, angle: f32) -> Mat4 {
         let mut mat = Mat4::default();
-        mat.m[0][0] = 1.0;
+        mat.m[0][0] = 1.0_f32;
         mat.m[1][1] = angle.cos();
         mat.m[1][2] = angle.sin();
         mat.m[2][1] = -angle.sin();
         mat.m[2][2] = angle.cos();
-        mat.m[3][3] = 1.0;
+        mat.m[3][3] = 1.0_f32;
 
         mat
     }
@@ -44,9 +44,9 @@ impl Mat4 {
         mat.m[0][0] = angle.cos();
         mat.m[0][2] = angle.sin();
         mat.m[2][0] = -angle.sin();
-        mat.m[1][1] = 1.0;
+        mat.m[1][1] = 1.0_f32;
         mat.m[2][2] = angle.cos();
-        mat.m[3][3] = 1.0;
+        mat.m[3][3] = 1.0_f32;
 
         mat
     }
@@ -57,18 +57,18 @@ impl Mat4 {
         mat.m[0][1] = angle.sin();
         mat.m[1][0] = -angle.sin();
         mat.m[1][1] = angle.cos();
-        mat.m[2][2] = 1.0;
-        mat.m[3][3] = 1.0;
+        mat.m[2][2] = 1.0_f32;
+        mat.m[3][3] = 1.0_f32;
 
         mat
     }
 
     pub fn translate(&self, x: f32, y: f32, z: f32) -> Mat4 {
         let mut mat = Mat4::default();
-        mat.m[0][0] = 1.0;
-        mat.m[1][1] = 1.0;
-        mat.m[2][2] = 1.0;
-        mat.m[3][3] = 1.0;
+        mat.m[0][0] = 1.0_f32;
+        mat.m[1][1] = 1.0_f32;
+        mat.m[2][2] = 1.0_f32;
+        mat.m[3][3] = 1.0_f32;
         mat.m[3][0] = x;
         mat.m[3][1] = y;
         mat.m[3][2] = z;
@@ -77,15 +77,15 @@ impl Mat4 {
     }
 
     pub fn project(fov_deg: f32, aspect_ratio: f32, near: f32, far: f32) -> Mat4 {
-        let fov_rad = 1.0 / (fov_deg * 0.5 / 180.0 * std::f32::consts::PI).tan();
+        let fov_rad = 1.0_f32 / (fov_deg * 0.5_f32 / 180.0_f32 * std::f32::consts::PI).tan();
         let mut mat: Mat4 = Mat4::default();
 
         mat.m[0][0] = aspect_ratio * fov_rad;
         mat.m[1][1] = fov_rad;
         mat.m[2][2] = far / (far - near);
         mat.m[3][2] = -(far * near) / (far - near);
-        mat.m[2][3] = 1.0;
-        mat.m[3][3] = 0.0;
+        mat.m[2][3] = 1.0_f32;
+        mat.m[3][3] = 0.0_f32;
 
         mat
     }
@@ -99,23 +99,23 @@ impl Mat4 {
         let new_right = new_up.cross_product(&new_forward);
 
         let mut matrix = Mat4::default();
-        matrix.m[0][0] = new_right.x;   matrix.m[0][1] = new_right.y;   matrix.m[0][2] = new_right.z;   matrix.m[0][3] = 1.0;
-        matrix.m[1][0] = new_up.x;      matrix.m[1][1] = new_up.y;      matrix.m[1][2] = new_up.z;      matrix.m[1][3] = 1.0;
-        matrix.m[2][0] = new_forward.x; matrix.m[2][1] = new_forward.y; matrix.m[2][2] = new_forward.z; matrix.m[2][3] = 1.0;
-        matrix.m[3][0] = pos.x; matrix.m[3][1] = pos.y; matrix.m[3][2] = pos.z; matrix.m[3][3] = 1.0;
+        matrix.m[0][0] = new_right.x;   matrix.m[0][1] = new_right.y;   matrix.m[0][2] = new_right.z;   matrix.m[0][3] = 1.0_f32;
+        matrix.m[1][0] = new_up.x;      matrix.m[1][1] = new_up.y;      matrix.m[1][2] = new_up.z;      matrix.m[1][3] = 1.0_f32;
+        matrix.m[2][0] = new_forward.x; matrix.m[2][1] = new_forward.y; matrix.m[2][2] = new_forward.z; matrix.m[2][3] = 1.0_f32;
+        matrix.m[3][0] = pos.x; matrix.m[3][1] = pos.y; matrix.m[3][2] = pos.z; matrix.m[3][3] = 1.0_f32;
 
         matrix
     }
 
     pub fn quick_inverse(&self) -> Mat4 {
         let mut mat = Mat4::default();
-        mat.m[0][0] = self.m[0][0]; mat.m[0][1] = self.m[1][0]; mat.m[0][2] = self.m[2][0]; mat.m[0][3] = 0.0;
-        mat.m[1][0] = self.m[0][1]; mat.m[1][1] = self.m[1][1]; mat.m[1][2] = self.m[2][1]; mat.m[1][3] = 0.0;
-        mat.m[2][0] = self.m[0][2]; mat.m[2][1] = self.m[1][2]; mat.m[2][2] = self.m[2][2]; mat.m[2][3] = 0.0;
+        mat.m[0][0] = self.m[0][0]; mat.m[0][1] = self.m[1][0]; mat.m[0][2] = self.m[2][0]; mat.m[0][3] = 0.0_f32;
+        mat.m[1][0] = self.m[0][1]; mat.m[1][1] = self.m[1][1]; mat.m[1][2] = self.m[2][1]; mat.m[1][3] = 0.0_f32;
+        mat.m[2][0] = self.m[0][2]; mat.m[2][1] = self.m[1][2]; mat.m[2][2] = self.m[2][2]; mat.m[2][3] = 0.0_f32;
         mat.m[3][0] = -(self.m[3][0] * mat.m[0][0] + self.m[3][1] * mat.m[1][0] + self.m[3][2] * mat.m[2][0]);
         mat.m[3][1] = -(self.m[3][0] * mat.m[0][1] + self.m[3][1] * mat.m[1][1] + self.m[3][2] * mat.m[2][1]);
         mat.m[3][2] = -(self.m[3][0] * mat.m[0][2] + self.m[3][1] * mat.m[1][2] + self.m[3][2] * mat.m[2][2]);
-        mat.m[3][3] = 1.0;
+        mat.m[3][3] = 1.0_f32;
 
         mat
     }
