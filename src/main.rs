@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use drawer::Drawer;
-use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{CursorStyle, Key, MouseMode, Scale, ScaleMode, Window, WindowOptions};
 
 mod drawer;
 pub mod math;
@@ -20,10 +20,12 @@ fn main() {
 
     let mut drawer = Drawer::new(SCREEN_WIDTH, SCREEN_HEIGHT, window.clone());
 
+    drawer.ready();
+
     let mut is_open = window.borrow().is_open();
     let mut is_down = window.borrow().is_key_down(Key::Escape);
 
-    let (near, far, fov_deg, aspect_ratio) = drawer.ready();
+    let (near, far, fov_deg, aspect_ratio) = (drawer.camera.near, drawer.camera.far, drawer.camera.fov, drawer.camera.aspect_ratio);
 
     let mut last_instant = Instant::now();
 

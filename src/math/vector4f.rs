@@ -110,6 +110,10 @@ impl Display for Vec4F {
 }
 
 impl Vec4F {
+    pub fn new(x: f32, y: f32, z: f32) -> Vec4F {
+        Vec4F { x, y, z, ..Vec4F::default() }
+    }
+
     pub fn length(&self) -> f32 {
         (self.dot_product(&self)).sqrt()
     }

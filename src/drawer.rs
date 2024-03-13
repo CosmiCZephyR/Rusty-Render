@@ -1,9 +1,9 @@
 use crate::camera::Camera;
-use minifb::{Key, Window};
-use rusttype::{point, Font, Scale};
-use std::{cell::RefCell, collections::VecDeque, mem::swap, rc::Rc, vec};
+use minifb::{ Key, Window };
+use rusttype::{ point, Font, Scale };
+use std::{ cell::RefCell, mem::swap, ops::Mul, rc::Rc, vec };
 
-pub use crate::math::{matrix4::Mat4, mesh::Mesh, vector4f::Vec4F};
+pub use crate::math::{ matrix4::Mat4, mesh::Mesh, vector4f::Vec4F };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Triangle {
@@ -12,34 +12,37 @@ pub struct Triangle {
 }
 
 impl Triangle {
-    fn average_z(&self) -> f32 {
+    pub fn average_z(&self) -> f32 {
         (self.p[0].z + self.p[1].z + self.p[2].z) / 3.0_f32
+    }
+}
+
+impl Mul for Triangle {
+    type Output = Triangle;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Triangle {
+            p: [self.p[0] * rhs.p[0], self.p[1] * rhs.p[1], self.p[2] * rhs.p[2]],
+            color: self.color,
+        }
+    }
+}
+
+impl Mul<Mat4> for Triangle {
+    type Output = Triangle;
+
+    fn mul(self, rhs: Mat4) -> Self::Output {
+        Triangle {
+            p: [rhs * self.p[0], rhs * self.p[1], rhs * self.p[2]],
+            color: self.color,
+        }
     }
 }
 
 impl Default for Triangle {
     fn default() -> Self {
         Triangle {
-            p: [
-                Vec4F {
-                    x: 0.0_f32,
-                    y: 0.0_f32,
-                    z: 0.0_f32,
-                    ..Vec4F::default()
-                },
-                Vec4F {
-                    x: 0.0_f32,
-                    y: 0.0_f32,
-                    z: 0.0_f32,
-                    ..Vec4F::default()
-                },
-                Vec4F {
-                    x: 0.0_f32,
-                    y: 0.0_f32,
-                    z: 0.0_f32,
-                    ..Vec4F::default()
-                },
-            ],
+            p: [Vec4F::default(), Vec4F::default(), Vec4F::default()],
             color: 0,
         }
     }
@@ -73,98 +76,54 @@ impl Drawer {
         }
     }
 
-    pub fn ready(&mut self) -> (f32, f32, f32, f32) {
-        self.mesh = self.mesh.parse_obj_file("src/objects/ship.obj");
+    pub fn ready(&mut self) {
+        self.mesh = self.mesh.parse_obj_file(r"src\objects\mountains.obj");
 
         self.project_matrix = self.camera.get_projection_matrix();
-
-        (
-            self.camera.near,
-            self.camera.far,
-            self.camera.fov,
-            self.camera.aspect_ratio,
-        )
     }
 
     pub fn update(&mut self, elapsed_time: f32) {
         self.handle_input(elapsed_time);
 
-        let mut mat_rot_z: Mat4 = Mat4::default();
-        let mut mat_rot_x: Mat4 = Mat4::default();
-
-        mat_rot_z = mat_rot_z.rotate_z(self.theta);
-        mat_rot_x = mat_rot_x.rotate_x(self.theta * 0.5_f32);
-
-        let mut mat_trans = Mat4::default();
-        mat_trans = mat_trans.translate(0.0_f32, 0.0_f32, 5.0_f32);
-
-        let mat_world: Mat4 = (mat_rot_z * mat_rot_x) * mat_trans;
-
+        let mat_rot_z: Mat4 = Mat4::default().rotate_z(self.theta);
+        let mat_rot_x: Mat4 = Mat4::default().rotate_x(self.theta * 0.5_f32);
+        let mat_trans = Mat4::default().translate(0.0_f32, 0.0_f32, 5.0_f32);
+        let mat_world: Mat4 = mat_rot_z * mat_rot_x * mat_trans;
         let mat_view = self.camera.get_view_matrix();
 
         let mut triangles_to_raster: Vec<Triangle> = Vec::new();
 
         for tri in self.mesh.tris.clone().iter_mut() {
-            let mut tri_projected = Triangle::default();
-            let mut tri_transformed = Triangle::default();
-            let mut tri_viewed = Triangle::default();
+            let mut tri_projected: Triangle;
+            let mut tri_viewed: Triangle;
+            let mut tri_transformed: Triangle = *tri * mat_world;
 
-            tri_transformed.p[0] = mat_world * tri.p[0];
-            tri_transformed.p[1] = mat_world * tri.p[1];
-            tri_transformed.p[2] = mat_world * tri.p[2];
-
-            let mut normal: Vec4F;
-            let line1: Vec4F;
-            let line2: Vec4F;
-
-            line1 = tri_transformed.p[1] - tri_transformed.p[0];
-            line2 = tri_transformed.p[2] - tri_transformed.p[0];
-
-            normal = line1.cross_product(&line2);
-            normal = normal.normalize();
+            let line1: Vec4F = tri_transformed.p[1] - tri_transformed.p[0];
+            let line2: Vec4F = tri_transformed.p[2] - tri_transformed.p[0];
+            let normal: Vec4F = line1.cross_product(&line2).normalize();
 
             let camera_ray = tri_transformed.p[0] - self.camera.position;
 
             if normal.dot_product(&camera_ray) < 0.0_f32 {
-                let mut light_direction = Vec4F {
-                    x: 0.0_f32,
-                    y: 1.0_f32,
-                    z: -1.0_f32,
-                    ..Vec4F::default()
-                };
-                light_direction = light_direction.normalize();
+                let light_direction = Vec4F::new(0.0_f32, 1.0_f32, -1.0_f32).normalize();
 
-                let dot_product = 0.1_f32.max(normal.dot_product(&light_direction));
+                let dot_product = (0.1_f32).max(normal.dot_product(&light_direction));
 
                 let col = Self::get_color(dot_product);
                 tri_transformed.color = col;
 
-                tri_viewed.p[0] = mat_view * tri_transformed.p[0];
-                tri_viewed.p[1] = mat_view * tri_transformed.p[1];
-                tri_viewed.p[2] = mat_view * tri_transformed.p[2];
+                tri_viewed = tri_transformed * mat_view;
                 tri_viewed.color = tri_transformed.color;
 
                 let clipped: Vec<Triangle>;
                 clipped = self.clip_against_plane(
-                    &mut Vec4F {
-                        x: 0.0_f32,
-                        y: 0.0_f32,
-                        z: 0.1_f32,
-                        ..Vec4F::default()
-                    },
-                    &mut Vec4F {
-                        x: 0.0_f32,
-                        y: 0.0_f32,
-                        z: 1.0_f32,
-                        ..Vec4F::default()
-                    },
-                    &mut tri_viewed,
+                    &mut Vec4F::new(0.0_f32, 0.0_f32, 0.1_f32),
+                    &mut Vec4F::new(0.0_f32, 0.0_f32, 1.0_f32),
+                    &mut tri_viewed
                 );
 
                 for n in 0..clipped.len() {
-                    tri_projected.p[0] = self.project_matrix * clipped[n].p[0];
-                    tri_projected.p[1] = self.project_matrix * clipped[n].p[1];
-                    tri_projected.p[2] = self.project_matrix * clipped[n].p[2];
+                    tri_projected = clipped[n] * self.project_matrix;
                     tri_projected.color = clipped[n].color;
 
                     tri_projected.p[0] = tri_projected.p[0] / tri_projected.p[0].w;
@@ -178,22 +137,17 @@ impl Drawer {
                     tri_projected.p[2].x *= -1.0_f32;
                     tri_projected.p[2].y *= -1.0_f32;
 
-                    let offset_view = Vec4F {
-                        x: 1.0_f32,
-                        y: 1.0_f32,
-                        z: 0.0_f32,
-                        ..Vec4F::default()
-                    };
+                    let offset_view = Vec4F::new(1.0, 1.0, 0.0);
 
                     tri_projected.p[0] = tri_projected.p[0] + offset_view;
                     tri_projected.p[1] = tri_projected.p[1] + offset_view;
                     tri_projected.p[2] = tri_projected.p[2] + offset_view;
-                    tri_projected.p[0].x *= 0.5_f32 * self.width as f32;
-                    tri_projected.p[0].y *= 0.5_f32 * self.height as f32;
-                    tri_projected.p[1].x *= 0.5_f32 * self.width as f32;
-                    tri_projected.p[1].y *= 0.5_f32 * self.height as f32;
-                    tri_projected.p[2].x *= 0.5_f32 * self.width as f32;
-                    tri_projected.p[2].y *= 0.5_f32 * self.height as f32;
+                    tri_projected.p[0].x *= 0.5_f32 * (self.width as f32);
+                    tri_projected.p[0].y *= 0.5_f32 * (self.height as f32);
+                    tri_projected.p[1].x *= 0.5_f32 * (self.width as f32);
+                    tri_projected.p[1].y *= 0.5_f32 * (self.height as f32);
+                    tri_projected.p[2].x *= 0.5_f32 * (self.width as f32);
+                    tri_projected.p[2].y *= 0.5_f32 * (self.height as f32);
 
                     triangles_to_raster.push(tri_projected);
                 }
@@ -201,125 +155,59 @@ impl Drawer {
         }
 
         triangles_to_raster.sort_by(|a, b| {
-            b.average_z()
-                .partial_cmp(&a.average_z())
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.average_z().partial_cmp(&a.average_z()).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         self.fill(0, 0, self.width as i32, self.height as i32, 0);
 
+        let planes = [
+            (
+                Vec4F { x: 0.0, y: 0.0, z: 0.0, ..Vec4F::default() },
+                Vec4F { x: 0.0, y: 1.0, z: 0.0, ..Vec4F::default() },
+            ),
+            (
+                Vec4F { x: 0.0, y: (self.height as f32) - 1.0, z: 0.0, ..Vec4F::default() },
+                Vec4F { x: 0.0, y: -1.0, z: 0.0, ..Vec4F::default() },
+            ),
+            (
+                Vec4F { x: 0.0, y: 0.0, z: 0.0, ..Vec4F::default() },
+                Vec4F { x: 1.0, y: 0.0, z: 0.0, ..Vec4F::default() },
+            ),
+            (
+                Vec4F { x: (self.width as f32) - 1.0, y: 0.0, z: 0.0, ..Vec4F::default() },
+                Vec4F { x: -1.0, y: 0.0, z: 0.0, ..Vec4F::default() },
+            ),
+        ];
+
         for tri_to_raster in triangles_to_raster.iter() {
-            let mut list_triangles: VecDeque<Triangle> = VecDeque::new();
-            list_triangles.push_back(*tri_to_raster);
+            let mut list_triangles: Vec<Triangle> = Vec::new();
+            list_triangles.push(*tri_to_raster);
 
-            let mut new_triangles = 1;
-
-            for p in 1..=4 {
-                let mut tris_to_add: Vec<Triangle> = vec![];
-                while new_triangles > 0 {
-                    let mut test = *list_triangles.front().unwrap();
-                    list_triangles.pop_front();
-                    new_triangles -= 1;
-
-                    match p {
-                        1 => {
-                            tris_to_add = self.clip_against_plane(
-                                &mut Vec4F {
-                                    x: 0.0_f32,
-                                    y: 0.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut Vec4F {
-                                    x: 0.0_f32,
-                                    y: 1.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut test,
-                            );
-                        }
-                        2 => {
-                            tris_to_add = self.clip_against_plane(
-                                &mut Vec4F {
-                                    x: 0.0_f32,
-                                    y: self.height as f32 - 1.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut Vec4F {
-                                    x: 0.0_f32,
-                                    y: -1.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut test,
-                            );
-                        }
-                        3 => {
-                            tris_to_add = self.clip_against_plane(
-                                &mut Vec4F {
-                                    x: 0.0_f32,
-                                    y: 0.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut Vec4F {
-                                    x: 1.0_f32,
-                                    y: 0.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut test,
-                            );
-                        }
-                        4 => {
-                            tris_to_add = self.clip_against_plane(
-                                &mut Vec4F {
-                                    x: self.width as f32 - 1.0_f32,
-                                    y: 0.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut Vec4F {
-                                    x: -1.0_f32,
-                                    y: 0.0_f32,
-                                    z: 0.0_f32,
-                                    ..Vec4F::default()
-                                },
-                                &mut test,
-                            );
-                        }
-                        _ => {}
-                    }
-
-                    for t in tris_to_add.clone() {
-                        list_triangles.push_back(t);
-                    }
+            for (ref mut plane_pos, ref mut plane_normal) in planes {
+                let mut new_list_triangles = Vec::new();
+                for test in list_triangles.drain(..) {
+                    let tris_to_add = self.clip_against_plane(
+                        plane_pos,
+                        plane_normal,
+                        &mut test.clone()
+                    );
+                    new_list_triangles.extend(tris_to_add);
                 }
-                new_triangles = list_triangles.len();
+                list_triangles = new_list_triangles;
             }
 
             for t in list_triangles {
-                self.fill_triangle(
-                    t.p[0].x as i32,
-                    t.p[0].y as i32,
-                    t.p[1].x as i32,
-                    t.p[1].y as i32,
-                    t.p[2].x as i32,
-                    t.p[2].y as i32,
-                    t.color,
-                );
+                self.fill_triangle_from(t);
 
-                self.draw_triangle(
-                    t.p[0].x as i32,
-                    t.p[0].y as i32,
-                    t.p[1].x as i32,
-                    t.p[1].y as i32,
-                    t.p[2].x as i32,
-                    t.p[2].y as i32,
-                    0,
-                );
+                // self.draw_triangle(
+                //     t.p[0].x as i32,
+                //     t.p[0].y as i32,
+                //     t.p[1].x as i32,
+                //     t.p[1].y as i32,
+                //     t.p[2].x as i32,
+                //     t.p[2].y as i32,
+                //     0,
+                // );
             }
         }
 
@@ -327,7 +215,7 @@ impl Drawer {
             10,
             100,
             format!("TRIANGLES: {}", triangles_to_raster.len()).as_str(),
-            0xFFFFFF,
+            0xffffff
         );
     }
 
@@ -336,37 +224,36 @@ impl Drawer {
             .borrow()
             .get_keys()
             .iter()
-            .for_each(|key| match key {
-                Key::Space => {
-                    self.camera.position.y += 8.0 * elapsed_time;
-                    if self.window.borrow().is_key_down(Key::LeftCtrl) {
-                        self.camera.position.y += 16.0 * elapsed_time;
+            .for_each(|key| {
+                match key {
+                    Key::Space => {
+                        self.camera.position.y += 8.0 * elapsed_time;
+                        if self.window.borrow().is_key_down(Key::LeftCtrl) {
+                            self.camera.position.y += 16.0 * elapsed_time;
+                        }
                     }
-                }
-                Key::LeftShift => {
-                    self.camera.position.y -= 8.0 * elapsed_time;
-                }
-                Key::W => {
-                    self.camera.position += self.camera.look_dir * (8.0 * elapsed_time);
-                    if self.window.borrow().is_key_down(Key::LeftCtrl) {
-                        self.camera.position += self.camera.look_dir * (8.0 * elapsed_time) * 2.0;
+                    Key::LeftShift => {
+                        self.camera.position.y -= 8.0 * elapsed_time;
                     }
+                    Key::W => {
+                        self.camera.position += self.camera.look_dir * (8.0 * elapsed_time);
+                        if self.window.borrow().is_key_down(Key::LeftCtrl) {
+                            self.camera.position +=
+                                self.camera.look_dir * (8.0 * elapsed_time) * 2.0;
+                        }
+                    }
+                    Key::S => {
+                        self.camera.position -= self.camera.look_dir * (8.0 * elapsed_time);
+                    }
+                    Key::A => {
+                        self.camera.yaw -= 2.0 * elapsed_time;
+                    }
+                    Key::D => {
+                        self.camera.yaw += 2.0 * elapsed_time;
+                    }
+                    _ => {}
                 }
-                Key::S => {
-                    self.camera.position -= self.camera.look_dir * (8.0 * elapsed_time);
-                }
-                Key::A => {
-                    self.camera.yaw -= 2.0 * elapsed_time;
-                }
-                Key::D => {
-                    self.camera.yaw += 2.0 * elapsed_time;
-                }
-                _ => {}
             });
-    }
-
-    fn average(i: &Triangle) -> f32 {
-        (i.p[0].z + i.p[1].z + i.p[2].z) / 3.0_f32
     }
 
     fn get_color(lum: f32) -> u32 {
@@ -375,28 +262,28 @@ impl Drawer {
         let color = match pixel_bw {
             0 => 0x000000,
             1 => 0x151515,
-            2 => 0x2A2A2A,
-            3 => 0x3F3F3F,
+            2 => 0x2a2a2a,
+            3 => 0x3f3f3f,
             4 => 0x555555,
-            5 => 0x6A6A6A,
-            6 => 0x7F7F7F,
+            5 => 0x6a6a6a,
+            6 => 0x7f7f7f,
             7 => 0x949494,
-            8 => 0xAAAAAA,
-            9 => 0xBFBFBF,
-            10 => 0xD4D4D4,
-            11 => 0xE9E9E9,
-            12 => 0xFFFFFF,
+            8 => 0xaaaaaa,
+            9 => 0xbfbfbf,
+            10 => 0xd4d4d4,
+            11 => 0xe9e9e9,
+            12 => 0xffffff,
             _ => 0x000000,
         };
 
         color
     }
 
-    fn clip_against_plane<'a>(
+    fn clip_against_plane(
         &mut self,
-        plane_p: &'a mut Vec4F,
+        plane_p: &mut Vec4F,
         plane_n: &mut Vec4F,
-        in_tri: &'a mut Triangle,
+        in_tri: &mut Triangle
     ) -> Vec<Triangle> {
         *plane_n = plane_n.normalize();
 
@@ -404,8 +291,7 @@ impl Drawer {
 
         let dist = |p: &mut Vec4F| {
             let _n = p.normalize();
-            return plane_n.x * p.x + plane_n.y * p.y + plane_n.z * p.z
-                - plane_n.dot_product(&plane_p);
+            return plane_n.x * p.x + plane_n.y * p.y + plane_n.z * p.z - plane_n.dot_product(&plane_p);
         };
 
         let mut inside_points: [Vec4F; 3] = [Vec4F::default(); 3];
@@ -457,10 +343,18 @@ impl Drawer {
             out_tri1.color = in_tri.color;
 
             out_tri1.p[0] = inside_points[0];
-            out_tri1.p[1] =
-                Vec4F::intersects_plane(plane_p, plane_n, &inside_points[0], &outside_points[0]);
-            out_tri1.p[2] =
-                Vec4F::intersects_plane(plane_p, plane_n, &inside_points[0], &outside_points[1]);
+            out_tri1.p[1] = Vec4F::intersects_plane(
+                plane_p,
+                plane_n,
+                &inside_points[0],
+                &outside_points[0]
+            );
+            out_tri1.p[2] = Vec4F::intersects_plane(
+                plane_p,
+                plane_n,
+                &inside_points[0],
+                &outside_points[1]
+            );
 
             return vec![out_tri1];
         }
@@ -471,13 +365,21 @@ impl Drawer {
 
             out_tri1.p[0] = inside_points[0];
             out_tri1.p[1] = inside_points[1];
-            out_tri1.p[2] =
-                Vec4F::intersects_plane(plane_p, plane_n, &inside_points[0], &outside_points[0]);
+            out_tri1.p[2] = Vec4F::intersects_plane(
+                plane_p,
+                plane_n,
+                &inside_points[0],
+                &outside_points[0]
+            );
 
             out_tri2.p[0] = inside_points[1];
             out_tri2.p[1] = out_tri1.p[2];
-            out_tri2.p[2] =
-                Vec4F::intersects_plane(plane_p, plane_n, &inside_points[1], &outside_points[0]);
+            out_tri2.p[2] = Vec4F::intersects_plane(
+                plane_p,
+                plane_n,
+                &inside_points[1],
+                &outside_points[0]
+            );
 
             return vec![out_tri1, out_tri2];
         }
@@ -491,8 +393,8 @@ impl Drawer {
     }
 
     pub fn draw(&mut self, x: i32, y: i32, col: u32) {
-        if x >= 0 && x < self.width as i32 && y >= 0 && y < self.height as i32 {
-            self.buffer[(y * self.width as i32 + x) as usize] = col;
+        if x >= 0 && x < (self.width as i32) && y >= 0 && y < (self.height as i32) {
+            self.buffer[(y * (self.width as i32) + x) as usize] = col;
         }
     }
 
@@ -505,14 +407,14 @@ impl Drawer {
         }
 
         while y >= x {
-            self.draw(xc + x, yc + y, 0xFFFFFF);
-            self.draw(xc + y, yc + x, 0xFFFFFF);
-            self.draw(xc - y, yc + x, 0xFFFFFF);
-            self.draw(xc - x, yc + y, 0xFFFFFF);
-            self.draw(xc - x, yc - y, 0xFFFFFF);
-            self.draw(xc - y, yc - x, 0xFFFFFF);
-            self.draw(xc + y, yc - x, 0xFFFFFF);
-            self.draw(xc + x, yc - y, 0xFFFFFF);
+            self.draw(xc + x, yc + y, 0xffffff);
+            self.draw(xc + y, yc + x, 0xffffff);
+            self.draw(xc - y, yc + x, 0xffffff);
+            self.draw(xc - x, yc + y, 0xffffff);
+            self.draw(xc - x, yc - y, 0xffffff);
+            self.draw(xc - y, yc - x, 0xffffff);
+            self.draw(xc + y, yc - x, 0xffffff);
+            self.draw(xc + x, yc - y, 0xffffff);
             if p < 0 {
                 p += 4 * x + 6;
             } else {
@@ -531,7 +433,7 @@ impl Drawer {
         y2: i32,
         x3: i32,
         y3: i32,
-        col: u32,
+        col: u32
     ) {
         self.draw_line(x1, y1, x2, y2, col);
         self.draw_line(x2, y2, x3, y3, col);
@@ -604,6 +506,18 @@ impl Drawer {
         }
     }
 
+    pub fn fill_triangle_from(&mut self, tri: Triangle) {
+        self.fill_triangle(
+            tri.p[0].x as i32,
+            tri.p[0].y as i32,
+            tri.p[1].x as i32,
+            tri.p[1].y as i32,
+            tri.p[2].x as i32,
+            tri.p[2].y as i32,
+            tri.color
+        );
+    }
+
     pub fn fill_triangle(
         &mut self,
         x1: i32,
@@ -612,12 +526,16 @@ impl Drawer {
         y2: i32,
         x3: i32,
         y3: i32,
-        col: u32,
+        col: u32
     ) {
         // count_calls(self);
 
         // Sort the points by y-coordinate
-        let mut points = [(x1, y1), (x2, y2), (x3, y3)];
+        let mut points = [
+            (x1, y1),
+            (x2, y2),
+            (x3, y3),
+        ];
         points.sort_by_key(|p| p.1);
 
         let (x1, y1) = points[0];
@@ -625,31 +543,19 @@ impl Drawer {
         let (x3, y3) = points[2];
 
         // Calculate the slopes
-        let slope_a = if y2 - y1 != 0 {
-            (x2 - x1) as f32 / (y2 - y1) as f32
-        } else {
-            0.0
-        };
-        let slope_b = if y3 - y1 != 0 {
-            (x3 - x1) as f32 / (y3 - y1) as f32
-        } else {
-            0.0
-        };
-        let slope_c = if y3 - y2 != 0 {
-            (x3 - x2) as f32 / (y3 - y2) as f32
-        } else {
-            0.0
-        };
+        let slope_a = if y2 - y1 != 0 { ((x2 - x1) as f32) / ((y2 - y1) as f32) } else { 0.0 };
+        let slope_b = if y3 - y1 != 0 { ((x3 - x1) as f32) / ((y3 - y1) as f32) } else { 0.0 };
+        let slope_c = if y3 - y2 != 0 { ((x3 - x2) as f32) / ((y3 - y2) as f32) } else { 0.0 };
 
         // Draw the triangle
         for y in y1..=y2 {
-            let xa = x1 as f32 + slope_a * (y - y1) as f32;
-            let xb = x1 as f32 + slope_b * (y - y1) as f32;
+            let xa = (x1 as f32) + slope_a * ((y - y1) as f32);
+            let xb = (x1 as f32) + slope_b * ((y - y1) as f32);
             self.fill_line(xa.round() as i32, xb.round() as i32, y, col);
         }
         for y in y2..=y3 {
-            let xa = x2 as f32 + slope_c * (y - y2) as f32;
-            let xb = x1 as f32 + slope_b * (y - y1) as f32;
+            let xa = (x2 as f32) + slope_c * ((y - y2) as f32);
+            let xb = (x1 as f32) + slope_b * ((y - y1) as f32);
             self.fill_line(xa.round() as i32, xb.round() as i32, y, col);
         }
     }
@@ -672,14 +578,14 @@ impl Drawer {
         if x < 0 {
             x = 0;
         }
-        if x >= self.width as i32 {
-            x = self.width as i32 - 1;
+        if x >= (self.width as i32) {
+            x = (self.width as i32) - 1;
         }
         if y < 0 {
             y = 0;
         }
-        if y >= self.height as i32 {
-            y = self.height as i32 - 1;
+        if y >= (self.height as i32) {
+            y = (self.height as i32) - 1;
         }
     }
 
@@ -694,23 +600,24 @@ impl Drawer {
     }
 
     pub fn draw_string(&mut self, x: i32, y: i32, string: &str, col: u32) {
-        let font: Font<'static> =
-            Font::try_from_bytes(include_bytes!(r"assets/pixelfont.ttf") as &[u8]).unwrap();
+        let font: Font<'static> = Font::try_from_bytes(
+            include_bytes!(r"assets\pixelfont.ttf") as &[u8]
+        ).unwrap();
         let height: f32 = 20f32; // adjust as needed
         let scale = Scale {
             x: height,
             y: height,
         };
         let v_metrics = font.v_metrics(scale);
-        let offset = point(x as f32, v_metrics.ascent + y as f32);
+        let offset = point(x as f32, v_metrics.ascent + (y as f32));
         let iter = font.layout(string, scale, offset);
 
         for g in iter {
             if let Some(bb) = g.pixel_bounding_box() {
                 g.draw(|x, y, v| {
-                    let v = v * 0xFF as f32;
-                    let x = x + bb.min.x as u32;
-                    let y = y + bb.min.y as u32;
+                    let v = v * (0xff as f32);
+                    let x = x + (bb.min.x as u32);
+                    let y = y + (bb.min.y as u32);
                     if v > 150.0 {
                         self.draw(x as i32, y as i32, col);
                     }
@@ -720,6 +627,6 @@ impl Drawer {
     }
 
     fn get(&self, x: i32, y: i32) -> u32 {
-        self.buffer[y as usize * self.width + x as usize]
+        self.buffer[(y as usize) * self.width + (x as usize)]
     }
 }
