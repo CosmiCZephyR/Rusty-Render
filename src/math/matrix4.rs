@@ -1,4 +1,4 @@
-use std::ops::Mul;
+use std::ops::{Add, Mul, Sub};
 use std::default::Default;
 use crate::math::vector4f::Vec4F;
 
@@ -10,7 +10,7 @@ pub struct Mat4 {
 impl Default for Mat4 {
     fn default() -> Self {
         Mat4 {
-            m: [[0.0; 4]; 4]
+            m: [[0.0_f32; 4]; 4]
         }
     }
 }
@@ -119,6 +119,18 @@ impl Mat4 {
 
         mat
     }
+
+    pub fn transpose(&self) -> Mat4 {
+        let mut mat = Mat4::default();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                mat.m[j][i] = self.m[i][j];
+            }
+        }
+
+        mat
+    }
 }
 
 impl Mul for Mat4 {
@@ -145,5 +157,37 @@ impl Mul<Vec4F> for Mat4 {
             z: i.x * self.m[0][2] + i.y * self.m[1][2] + i.z * self.m[2][2] + self.m[3][2] * i.w,
             w: i.x * self.m[0][3] + i.y * self.m[1][3] + i.z * self.m[2][3] + self.m[3][3] * i.w,
         }
+    }
+}
+
+impl Add for Mat4 {
+    type Output = Mat4;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut mat = Mat4::default();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                mat.m[i][j] += rhs.m[i][j];
+            }
+        }
+
+        mat
+    }
+}
+
+impl Sub for Mat4 {
+    type Output = Mat4;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut mat = Mat4::default();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                mat.m[i][j] -= rhs.m[i][j];
+            }
+        }
+
+        mat
     }
 }

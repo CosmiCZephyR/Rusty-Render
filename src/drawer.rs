@@ -1,8 +1,7 @@
+use crate::camera::Camera;
 use minifb::{Key, Window};
-use rand::Rng;
 use rusttype::{point, Font, Scale};
 use std::{cell::RefCell, collections::VecDeque, mem::swap, rc::Rc, vec};
-use crate::camera::Camera;
 
 pub use crate::math::{matrix4::Mat4, mesh::Mesh, vector4f::Vec4F};
 
@@ -12,26 +11,32 @@ pub struct Triangle {
     pub color: u32,
 }
 
+impl Triangle {
+    fn average_z(&self) -> f32 {
+        (self.p[0].z + self.p[1].z + self.p[2].z) / 3.0_f32
+    }
+}
+
 impl Default for Triangle {
     fn default() -> Self {
         Triangle {
             p: [
                 Vec4F {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
+                    x: 0.0_f32,
+                    y: 0.0_f32,
+                    z: 0.0_f32,
                     ..Vec4F::default()
                 },
                 Vec4F {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
+                    x: 0.0_f32,
+                    y: 0.0_f32,
+                    z: 0.0_f32,
                     ..Vec4F::default()
                 },
                 Vec4F {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
+                    x: 0.0_f32,
+                    y: 0.0_f32,
+                    z: 0.0_f32,
                     ..Vec4F::default()
                 },
             ],
@@ -39,21 +44,6 @@ impl Default for Triangle {
         }
     }
 }
-
-// lazy_static! {
-//     pub static ref COUNTER: Mutex<u32> = Mutex::new(0);
-//     pub static ref START_TIME: Mutex<Instant> = Mutex::new(Instant::now());
-// }
-
-// fn count_calls(_drawer: &mut Drawer) {
-//     *COUNTER.lock().unwrap() += 1;
-//
-//     let elapse = START_TIME.lock().unwrap().elapsed();
-//     if elapse >= Duration::from_secs(1) {
-//         *COUNTER.lock().unwrap() = 0;
-//         *START_TIME.lock().unwrap() = Instant::now();
-//     }
-// }
 
 #[derive(Debug, Clone)]
 pub struct Drawer {
@@ -66,7 +56,7 @@ pub struct Drawer {
     mesh: Mesh,
     project_matrix: Mat4,
     theta: f32,
-    pub camera: Camera
+    pub camera: Camera,
 }
 
 impl Drawer {
@@ -77,20 +67,23 @@ impl Drawer {
             buffer: vec![0; width * height],
             mesh: Mesh::default(),
             project_matrix: Mat4::default(),
-            theta: 0.0,
+            theta: 0.0_f32,
             camera: Camera::default(),
-            window
+            window,
         }
     }
 
     pub fn ready(&mut self) -> (f32, f32, f32, f32) {
-        self.mesh = self
-            .mesh
-            .parse_obj_file(r"E:\Projects\rusty-3d\src\objects\ship.obj");
+        self.mesh = self.mesh.parse_obj_file("src/objects/ship.obj");
 
         self.project_matrix = self.camera.get_projection_matrix();
 
-        (self.camera.near, self.camera.far, self.camera.fov, self.camera.aspect_ratio)
+        (
+            self.camera.near,
+            self.camera.far,
+            self.camera.fov,
+            self.camera.aspect_ratio,
+        )
     }
 
     pub fn update(&mut self, elapsed_time: f32) {
@@ -100,14 +93,12 @@ impl Drawer {
         let mut mat_rot_x: Mat4 = Mat4::default();
 
         mat_rot_z = mat_rot_z.rotate_z(self.theta);
-        mat_rot_x = mat_rot_x.rotate_x(self.theta * 0.5);
+        mat_rot_x = mat_rot_x.rotate_x(self.theta * 0.5_f32);
 
         let mut mat_trans = Mat4::default();
-        mat_trans = mat_trans.translate(0.0, 0.0, 5.0);
+        mat_trans = mat_trans.translate(0.0_f32, 0.0_f32, 5.0_f32);
 
-        let mut mat_world: Mat4;
-        mat_world = mat_rot_z * mat_rot_x;
-        mat_world = mat_world * mat_trans;
+        let mat_world: Mat4 = (mat_rot_z * mat_rot_x) * mat_trans;
 
         let mat_view = self.camera.get_view_matrix();
 
@@ -134,7 +125,7 @@ impl Drawer {
 
             let camera_ray = tri_transformed.p[0] - self.camera.position;
 
-            if normal.dot_product(&camera_ray) < 0.0 {
+            if normal.dot_product(&camera_ray) < 0.0_f32 {
                 let mut light_direction = Vec4F {
                     x: 0.0_f32,
                     y: 1.0_f32,
@@ -156,15 +147,15 @@ impl Drawer {
                 let clipped: Vec<Triangle>;
                 clipped = self.clip_against_plane(
                     &mut Vec4F {
-                        x: 0.0,
-                        y: 0.0,
-                        z: 0.1,
+                        x: 0.0_f32,
+                        y: 0.0_f32,
+                        z: 0.1_f32,
                         ..Vec4F::default()
                     },
                     &mut Vec4F {
-                        x: 0.0,
-                        y: 0.0,
-                        z: 1.0,
+                        x: 0.0_f32,
+                        y: 0.0_f32,
+                        z: 1.0_f32,
                         ..Vec4F::default()
                     },
                     &mut tri_viewed,
@@ -180,28 +171,29 @@ impl Drawer {
                     tri_projected.p[1] = tri_projected.p[1] / tri_projected.p[1].w;
                     tri_projected.p[2] = tri_projected.p[2] / tri_projected.p[2].w;
 
-                    tri_projected.p[0].x *= -1.0;
-                    tri_projected.p[0].y *= -1.0;
-                    tri_projected.p[1].x *= -1.0;
-                    tri_projected.p[1].y *= -1.0;
-                    tri_projected.p[2].x *= -1.0;
-                    tri_projected.p[2].y *= -1.0;
+                    tri_projected.p[0].x *= -1.0_f32;
+                    tri_projected.p[0].y *= -1.0_f32;
+                    tri_projected.p[1].x *= -1.0_f32;
+                    tri_projected.p[1].y *= -1.0_f32;
+                    tri_projected.p[2].x *= -1.0_f32;
+                    tri_projected.p[2].y *= -1.0_f32;
 
                     let offset_view = Vec4F {
-                        x: 1.0,
-                        y: 1.0,
-                        z: 0.0,
+                        x: 1.0_f32,
+                        y: 1.0_f32,
+                        z: 0.0_f32,
                         ..Vec4F::default()
                     };
+
                     tri_projected.p[0] = tri_projected.p[0] + offset_view;
                     tri_projected.p[1] = tri_projected.p[1] + offset_view;
                     tri_projected.p[2] = tri_projected.p[2] + offset_view;
-                    tri_projected.p[0].x *= 0.5 * self.width as f32;
-                    tri_projected.p[0].y *= 0.5 * self.height as f32;
-                    tri_projected.p[1].x *= 0.5 * self.width as f32;
-                    tri_projected.p[1].y *= 0.5 * self.height as f32;
-                    tri_projected.p[2].x *= 0.5 * self.width as f32;
-                    tri_projected.p[2].y *= 0.5 * self.height as f32;
+                    tri_projected.p[0].x *= 0.5_f32 * self.width as f32;
+                    tri_projected.p[0].y *= 0.5_f32 * self.height as f32;
+                    tri_projected.p[1].x *= 0.5_f32 * self.width as f32;
+                    tri_projected.p[1].y *= 0.5_f32 * self.height as f32;
+                    tri_projected.p[2].x *= 0.5_f32 * self.width as f32;
+                    tri_projected.p[2].y *= 0.5_f32 * self.height as f32;
 
                     triangles_to_raster.push(tri_projected);
                 }
@@ -209,9 +201,9 @@ impl Drawer {
         }
 
         triangles_to_raster.sort_by(|a, b| {
-            let z1 = (a.p[0].z + a.p[1].z + a.p[2].z) / 3.0;
-            let z2 = (b.p[0].z + b.p[1].z + b.p[2].z) / 3.0;
-            z2.partial_cmp(&z1).unwrap_or(std::cmp::Ordering::Equal)
+            b.average_z()
+                .partial_cmp(&a.average_z())
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         self.fill(0, 0, self.width as i32, self.height as i32, 0);
@@ -220,7 +212,6 @@ impl Drawer {
             let mut list_triangles: VecDeque<Triangle> = VecDeque::new();
             list_triangles.push_back(*tri_to_raster);
 
-            // println!("Triangles: {:?}", list_triangles);
             let mut new_triangles = 1;
 
             for p in 1..=4 {
@@ -234,15 +225,15 @@ impl Drawer {
                         1 => {
                             tris_to_add = self.clip_against_plane(
                                 &mut Vec4F {
-                                    x: 0.0,
-                                    y: 0.0,
-                                    z: 0.0,
+                                    x: 0.0_f32,
+                                    y: 0.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut Vec4F {
-                                    x: 0.0,
-                                    y: 1.0,
-                                    z: 0.0,
+                                    x: 0.0_f32,
+                                    y: 1.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut test,
@@ -251,15 +242,15 @@ impl Drawer {
                         2 => {
                             tris_to_add = self.clip_against_plane(
                                 &mut Vec4F {
-                                    x: 0.0,
-                                    y: self.height as f32 - 1.0,
-                                    z: 0.0,
+                                    x: 0.0_f32,
+                                    y: self.height as f32 - 1.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut Vec4F {
-                                    x: 0.0,
-                                    y: -1.0,
-                                    z: 0.0,
+                                    x: 0.0_f32,
+                                    y: -1.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut test,
@@ -268,15 +259,15 @@ impl Drawer {
                         3 => {
                             tris_to_add = self.clip_against_plane(
                                 &mut Vec4F {
-                                    x: 0.0,
-                                    y: 0.0,
-                                    z: 0.0,
+                                    x: 0.0_f32,
+                                    y: 0.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut Vec4F {
-                                    x: 1.0,
-                                    y: 0.0,
-                                    z: 0.0,
+                                    x: 1.0_f32,
+                                    y: 0.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut test,
@@ -285,15 +276,15 @@ impl Drawer {
                         4 => {
                             tris_to_add = self.clip_against_plane(
                                 &mut Vec4F {
-                                    x: self.width as f32 - 1.0,
-                                    y: 0.0,
-                                    z: 0.0,
+                                    x: self.width as f32 - 1.0_f32,
+                                    y: 0.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut Vec4F {
-                                    x: -1.0,
-                                    y: 0.0,
-                                    z: 0.0,
+                                    x: -1.0_f32,
+                                    y: 0.0_f32,
+                                    z: 0.0_f32,
                                     ..Vec4F::default()
                                 },
                                 &mut test,
@@ -319,14 +310,19 @@ impl Drawer {
                     t.p[2].y as i32,
                     t.color,
                 );
+
                 self.draw_triangle(
-                    t.p[0].x as i32, t.p[0].y as i32,
-                    t.p[1].x as i32, t.p[1].y as i32,
-                    t.p[2].x as i32, t.p[2].y as i32,
-                    0
+                    t.p[0].x as i32,
+                    t.p[0].y as i32,
+                    t.p[1].x as i32,
+                    t.p[1].y as i32,
+                    t.p[2].x as i32,
+                    t.p[2].y as i32,
+                    0,
                 );
             }
         }
+
         self.draw_string(
             10,
             100,
@@ -336,8 +332,11 @@ impl Drawer {
     }
 
     fn handle_input(&mut self, elapsed_time: f32) {
-        self.window.borrow().get_keys().iter().for_each(|key| {
-            match key {
+        self.window
+            .borrow()
+            .get_keys()
+            .iter()
+            .for_each(|key| match key {
                 Key::Space => {
                     self.camera.position.y += 8.0 * elapsed_time;
                     if self.window.borrow().is_key_down(Key::LeftCtrl) {
@@ -363,16 +362,11 @@ impl Drawer {
                     self.camera.yaw += 2.0 * elapsed_time;
                 }
                 _ => {}
-            }
-        });
+            });
     }
 
-    fn random_rainbow_color() -> u32 {
-        let colors = vec![
-            0xFF0000, 0xFFA500, 0xFFFF00, 0x008000, 0x0000FF, 0x4B0082, 0xEE82EE,
-        ];
-        let index = rand::thread_rng().gen_range(0..colors.len());
-        colors[index]
+    fn average(i: &Triangle) -> f32 {
+        (i.p[0].z + i.p[1].z + i.p[2].z) / 3.0_f32
     }
 
     fn get_color(lum: f32) -> u32 {
@@ -701,7 +695,7 @@ impl Drawer {
 
     pub fn draw_string(&mut self, x: i32, y: i32, string: &str, col: u32) {
         let font: Font<'static> =
-            Font::try_from_bytes(include_bytes!(r"assets\pixelfont.ttf") as &[u8]).unwrap();
+            Font::try_from_bytes(include_bytes!(r"assets/pixelfont.ttf") as &[u8]).unwrap();
         let height: f32 = 20f32; // adjust as needed
         let scale = Scale {
             x: height,

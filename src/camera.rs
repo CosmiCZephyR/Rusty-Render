@@ -1,4 +1,4 @@
-use crate::math::{vector4f::Vec4F, matrix4::Mat4};
+use crate::math::{matrix4::Mat4, vector4f::Vec4F};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -16,7 +16,7 @@ pub struct Camera {
 
     // Rotation
     pub pitch: f32,
-    pub yaw: f32
+    pub yaw: f32,
 }
 
 impl Camera {
@@ -41,7 +41,7 @@ impl Camera {
                 ..Vec4F::default()
             },
             pitch: 0.0_f32,
-            yaw: 0.0_f32
+            yaw: 0.0_f32,
         }
     }
 
