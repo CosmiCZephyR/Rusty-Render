@@ -4,11 +4,11 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use drawer::Drawer;
-use minifb::{CursorStyle, Key, MouseMode, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
 
-mod drawer;
 pub mod math;
-mod camera;
+pub mod camera;
+mod drawer;
 
 const SCREEN_WIDTH: usize = 1920;
 const SCREEN_HEIGHT: usize = 1080;

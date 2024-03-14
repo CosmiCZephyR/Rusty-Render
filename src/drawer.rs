@@ -1,9 +1,11 @@
 use crate::camera::Camera;
 use minifb::{ Key, Window };
 use rusttype::{ point, Font, Scale };
-use std::{ cell::RefCell, mem::swap, ops::Mul, rc::Rc, vec };
+use std::{ cell::RefCell, mem::swap, ops::{Add, Div, Mul}, rc::Rc, vec };
 
 pub use crate::math::{ matrix4::Mat4, mesh::Mesh, vector4f::Vec4F };
+
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Triangle {
@@ -34,6 +36,28 @@ impl Mul<Mat4> for Triangle {
     fn mul(self, rhs: Mat4) -> Self::Output {
         Triangle {
             p: [rhs * self.p[0], rhs * self.p[1], rhs * self.p[2]],
+            color: self.color,
+        }
+    }
+}
+
+impl Div<f32> for Triangle {
+    type Output = Triangle;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        Triangle {
+            p: [self.p[0] / rhs, self.p[1] / rhs, self.p[2] / rhs],
+            color: self.color,
+        }
+    }
+}
+
+impl Add<Vec4F> for Triangle {
+    type Output = Triangle;
+
+    fn add(self, rhs: Vec4F) -> Self::Output {
+        Triangle {
+            p: [self.p[0] + rhs, self.p[1] + rhs, self.p[2] + rhs],
             color: self.color,
         }
     }
@@ -77,7 +101,7 @@ impl Drawer {
     }
 
     pub fn ready(&mut self) {
-        self.mesh = self.mesh.parse_obj_file(r"src\objects\mountains.obj");
+        self.mesh = self.mesh.parse_obj_file(r"src\objects\car.obj");
 
         self.project_matrix = self.camera.get_projection_matrix();
     }
@@ -94,7 +118,6 @@ impl Drawer {
         let mut triangles_to_raster: Vec<Triangle> = Vec::new();
 
         for tri in self.mesh.tris.clone().iter_mut() {
-            let mut tri_projected: Triangle;
             let mut tri_viewed: Triangle;
             let mut tri_transformed: Triangle = *tri * mat_world;
 
@@ -115,42 +138,13 @@ impl Drawer {
                 tri_viewed = tri_transformed * mat_view;
                 tri_viewed.color = tri_transformed.color;
 
-                let clipped: Vec<Triangle>;
-                clipped = self.clip_against_plane(
+                let clipped: Vec<Triangle> = self.clip_against_plane(
                     &mut Vec4F::new(0.0_f32, 0.0_f32, 0.1_f32),
                     &mut Vec4F::new(0.0_f32, 0.0_f32, 1.0_f32),
                     &mut tri_viewed
                 );
 
-                for n in 0..clipped.len() {
-                    tri_projected = clipped[n] * self.project_matrix;
-                    tri_projected.color = clipped[n].color;
-
-                    tri_projected.p[0] = tri_projected.p[0] / tri_projected.p[0].w;
-                    tri_projected.p[1] = tri_projected.p[1] / tri_projected.p[1].w;
-                    tri_projected.p[2] = tri_projected.p[2] / tri_projected.p[2].w;
-
-                    tri_projected.p[0].x *= -1.0_f32;
-                    tri_projected.p[0].y *= -1.0_f32;
-                    tri_projected.p[1].x *= -1.0_f32;
-                    tri_projected.p[1].y *= -1.0_f32;
-                    tri_projected.p[2].x *= -1.0_f32;
-                    tri_projected.p[2].y *= -1.0_f32;
-
-                    let offset_view = Vec4F::new(1.0, 1.0, 0.0);
-
-                    tri_projected.p[0] = tri_projected.p[0] + offset_view;
-                    tri_projected.p[1] = tri_projected.p[1] + offset_view;
-                    tri_projected.p[2] = tri_projected.p[2] + offset_view;
-                    tri_projected.p[0].x *= 0.5_f32 * (self.width as f32);
-                    tri_projected.p[0].y *= 0.5_f32 * (self.height as f32);
-                    tri_projected.p[1].x *= 0.5_f32 * (self.width as f32);
-                    tri_projected.p[1].y *= 0.5_f32 * (self.height as f32);
-                    tri_projected.p[2].x *= 0.5_f32 * (self.width as f32);
-                    tri_projected.p[2].y *= 0.5_f32 * (self.height as f32);
-
-                    triangles_to_raster.push(tri_projected);
-                }
+                self.project_triangle(&mut tri_viewed, clipped, &mut triangles_to_raster)
             }
         }
 
@@ -198,16 +192,7 @@ impl Drawer {
 
             for t in list_triangles {
                 self.fill_triangle_from(t);
-
-                // self.draw_triangle(
-                //     t.p[0].x as i32,
-                //     t.p[0].y as i32,
-                //     t.p[1].x as i32,
-                //     t.p[1].y as i32,
-                //     t.p[2].x as i32,
-                //     t.p[2].y as i32,
-                //     0,
-                // );
+                // self.draw_triangle_from(t);
             }
         }
 
@@ -217,6 +202,36 @@ impl Drawer {
             format!("TRIANGLES: {}", triangles_to_raster.len()).as_str(),
             0xffffff
         );
+    }
+
+    fn project_triangle(&self, tri: &mut Triangle, clipped: Vec<Triangle>, tris_to_raster: &mut Vec<Triangle>) {
+        for n in 0..clipped.len() {
+            *tri = clipped[n] * self.project_matrix;
+            tri.color = clipped[n].color;
+
+            tri.p[0] = tri.p[0] / tri.p[0].w;
+            tri.p[1] = tri.p[1] / tri.p[1].w;
+            tri.p[2] = tri.p[2] / tri.p[2].w;
+
+            tri.p[0].x *= -1.0_f32;
+            tri.p[0].y *= -1.0_f32;
+            tri.p[1].x *= -1.0_f32;
+            tri.p[1].y *= -1.0_f32;
+            tri.p[2].x *= -1.0_f32;
+            tri.p[2].y *= -1.0_f32;
+
+            let offset_view = Vec4F::new(1.0, 1.0, 0.0);
+
+            *tri = *tri + offset_view;
+            tri.p[0].x *= 0.5_f32 * (self.width as f32);
+            tri.p[0].y *= 0.5_f32 * (self.height as f32);
+            tri.p[1].x *= 0.5_f32 * (self.width as f32);
+            tri.p[1].y *= 0.5_f32 * (self.height as f32);
+            tri.p[2].x *= 0.5_f32 * (self.width as f32);
+            tri.p[2].y *= 0.5_f32 * (self.height as f32);
+
+            tris_to_raster.push(*tri);
+        }
     }
 
     fn handle_input(&mut self, elapsed_time: f32) {
@@ -504,6 +519,18 @@ impl Drawer {
                 self.draw(x, y, col);
             }
         }
+    }
+
+    pub fn draw_triangle_from(&mut self, tri: Triangle) {
+        self.draw_triangle(
+            tri.p[0].x as i32,
+            tri.p[0].y as i32,
+            tri.p[1].x as i32,
+            tri.p[1].y as i32,
+            tri.p[2].x as i32,
+            tri.p[2].y as i32,
+            tri.color
+        )
     }
 
     pub fn fill_triangle_from(&mut self, tri: Triangle) {
